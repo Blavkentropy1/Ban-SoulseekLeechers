@@ -87,6 +87,15 @@ class Plugin(BasePlugin):
                                 "too many message lines may get you temporarily banned for spam!"),
                 "type": "textview"
             },
+
+            "recheck_interval": {
+                "description": "Number of files after which to re-check the user's Shared File",
+                "type": "int", "minimum": 0
+            },
+            "recheck_enabled": {
+                "description": "Enable re-checking users after a specified number of files",
+                "type": "bool"
+            },
             "detected_leechers": {
                 "description": "Detected leechers",
                 "type": "list string"
@@ -107,11 +116,14 @@ class Plugin(BasePlugin):
             "suppress_ignored_user_logs": True,
             "suppress_ip_ban_logs": False,
             "suppress_all_messages": False,
-            "detected_leechers": []
+            "detected_leechers": [],
+            "recheck_interval": 10,
+            "recheck_enabled": True
         }
 
         self.probed_users = {}
         self.resolved_users = {}
+        self.uploaded_files_count = {}
 
     def loaded_notification(self):
         min_num_files = self.metasettings["num_files"]["minimum"]
@@ -185,6 +197,13 @@ class Plugin(BasePlugin):
 
     def upload_queued_notification(self, user, virtual_path, real_path):
         if user in self.probed_users:
+            # Increment file count and check if re-check is needed
+            self.uploaded_files_count[user] = self.uploaded_files_count.get(user, 0) + 1
+
+            if self.settings["recheck_enabled"] and self.uploaded_files_count[user] % self.settings["recheck_interval"] == 0:
+                stats = self.core.users.watched.get(user)
+                if stats is not None and stats.files is not None and stats.folders is not None:
+                    self.check_user(user, num_files=stats.files, num_folders=stats.folders)
             return
 
         self.probed_users[user] = "requesting_stats"
