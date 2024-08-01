@@ -1,5 +1,6 @@
 # COPYRIGHT (C) 2020-2024 Nicotine+ Contributors
 # COPYRIGHT (C) 2011 quinox <quinox@users.sf.net>
+# COPYRIGHT (C) 2024 BlavkEntropy1
 #
 # GNU GENERAL PUBLIC LICENSE
 #    Version 3, 29 June 2007
@@ -13,14 +14,14 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+# Rslash Soulseek, I Love your lefty mentality. But I dont like leechers. 
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
- 
-# Hi R/SOULSEEK, Please dont Hate me. I just hate Leechers. 
 
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
+
 
 class Plugin(BasePlugin):
     PLACEHOLDERS = {
@@ -31,23 +32,7 @@ class Plugin(BasePlugin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.settings = {
-            "message": "Please consider sharing more files if you would like to download from me again. Thanks :)",
-            "open_private_chat": True,
-            "num_files": 1,
-            "num_folders": 1,
-            "detected_leechers": [],
-            "ban_min_files": 100,
-            "ban_min_bytes": 10000,
-            "ban_block_ip": False,
-            "ignore_user": False
-        }
         self.metasettings = {
-            "message": {
-                "description": ("Private chat message to send to leechers. Each line is sent as a separate message, "
-                                "too many message lines may get you temporarily banned for spam!"),
-                "type": "textview"
-            },
             "open_private_chat": {
                 "description": "Open chat tabs when sending private messages to leechers",
                 "type": "bool"
@@ -76,10 +61,47 @@ class Plugin(BasePlugin):
                 "description": "Ignore users who do not meet the sharing requirements",
                 "type": "bool"
             },
+            "send_message_to_banned": {
+                "description": "Send a message to users who are banned",
+                "type": "bool"
+            },
+            "suppress_banned_user_logs": {
+                "description": "Suppress logs related to banned users",
+                "type": "bool"
+            },
+            "suppress_ignored_user_logs": {
+                "description": "Suppress logs related to ignored users",
+                "type": "bool"
+            },
+            "suppress_all_messages": {
+                "description": "Suppress all log messages",
+                "type": "bool"
+            },
             "detected_leechers": {
                 "description": "Detected leechers",
                 "type": "list string"
+            },
+            "message": {
+                "description": ("Private chat message to send to leechers. Each line is sent as a separate message, "
+                                "too many message lines may get you temporarily banned for spam!"),
+                "type": "textview"
             }
+        }
+
+        self.settings = {
+            "message": "Please consider sharing more files if you would like to download from me again. Until then, You are banned. Thanks :)",
+            "open_private_chat": False,
+            "num_files": 100,
+            "num_folders": 20,
+            "ban_min_files": 100,
+            "ban_min_bytes": 1000,
+            "ban_block_ip": False,
+            "ignore_user": False,
+            "send_message_to_banned": False,
+            "suppress_banned_user_logs": False,
+            "suppress_ignored_user_logs": True,
+            "suppress_all_messages": False,
+            "detected_leechers": []
         }
 
         self.probed_users = {}
@@ -95,10 +117,11 @@ class Plugin(BasePlugin):
         if self.settings["num_folders"] < min_num_folders:
             self.settings["num_folders"] = min_num_folders
 
-        self.log(
-            "Require users to have a minimum of %d files in %d shared public folders.",
-            (self.settings["num_files"], self.settings["num_folders"])
-        )
+        if not self.settings["suppress_all_messages"]:
+            self.log(
+                "Require users to have a minimum of %d files in %d shared public folders.",
+                (self.settings["num_files"], self.settings["num_folders"])
+            )
 
     def check_user(self, user, num_files, num_folders):
         if user not in self.probed_users:
@@ -116,11 +139,13 @@ class Plugin(BasePlugin):
             self.probed_users[user] = "okay"
 
             if is_user_accepted:
-                self.log("User %s is okay, sharing %s files in %s folders.", (user, num_files, num_folders))
+                if not self.settings["suppress_ignored_user_logs"]:
+                    self.log("User %s is okay, sharing %s files in %s folders.", (user, num_files, num_folders))
                 self.core.network_filter.unban_user(user)
                 self.core.network_filter.unignore_user(user)
             else:
-                self.log("Buddy %s is sharing %s files in %s folders. Not complaining.", (user, num_files, num_folders))
+                if not self.settings["suppress_ignored_user_logs"]:
+                    self.log("Buddy %s is sharing %s files in %s folders. Not complaining.", (user, num_files, num_folders))
             return
 
         if not self.probed_users[user].startswith("requesting"):
@@ -131,7 +156,8 @@ class Plugin(BasePlugin):
             return
 
         if (num_files <= 0 or num_folders <= 0) and self.probed_users[user] != "requesting_shares":
-            self.log("User %s has no shared files according to the server, requesting shares to verify…", user)
+            if not self.settings["suppress_all_messages"]:
+                self.log("User %s has no shared files according to the server, requesting shares to verify…", user)
             self.probed_users[user] = "requesting_shares"
             self.core.userbrowse.request_user_shares(user)
             return
@@ -145,7 +171,8 @@ class Plugin(BasePlugin):
             log_message = "User %s doesn't share enough files and banned"
 
         self.probed_users[user] = "pending_leecher"
-        self.log(log_message, (user, num_files, num_folders))
+        if not self.settings["suppress_all_messages"]:
+            self.log(log_message, (user, num_files, num_folders))
 
         if self.settings["ignore_user"]:
             self.core.network_filter.ignore_user(user)
@@ -176,7 +203,8 @@ class Plugin(BasePlugin):
         self.probed_users[user] = "processed_leecher"
 
         if not self.settings["message"]:
-            self.log("Leecher %s doesn't share enough files. No message is specified in plugin settings.", user)
+            if not self.settings["suppress_all_messages"]:
+                self.log("Leecher %s doesn't share enough files. No message is specified in plugin settings.", user)
             return
 
         for line in self.settings["message"].splitlines():
@@ -188,11 +216,13 @@ class Plugin(BasePlugin):
         if user not in self.settings["detected_leechers"]:
             self.settings["detected_leechers"].append(user)
 
-        self.log("Leecher %s doesn't share enough files. Message sent.", user)
+        if not self.settings["suppress_all_messages"]:
+            self.log("Leecher %s doesn't share enough files. Message sent.", user)
         self.ban_user(username=user)
         if self.settings["ban_block_ip"]:
             self.block_ip(username=user)
-        self.log("User %s banned", user)
+        if not self.settings["suppress_all_messages"]:
+            self.log("User %s banned", user)
 
         if self.settings["ignore_user"]:
             self.core.network_filter.ignore_user(user)
@@ -200,14 +230,17 @@ class Plugin(BasePlugin):
     def ban_user(self, username=None):
         if username:
             self.core.network_filter.ban_user(username)
-            self.log(f'User banned: {username}')
+            if self.settings["send_message_to_banned"]:
+                self.send_message(username)
+            if not self.settings["suppress_banned_user_logs"]:
+                self.log(f'User banned: {username}')
 
     def block_ip(self, username=None):
         if username and username in self.resolved_users:
             ip_address = self.resolved_users[username].get("ip_address")
             if ip_address:
-                self.log(f'Attempting to block IP: {ip_address}')
-                # Assuming `config.sections["server"]["ipblocklist"]` is a dictionary or list
+                if not self.settings["suppress_all_messages"]:
+                    self.log(f'Attempting to block IP: {ip_address}')
                 ip_list = config.sections["server"].get("ipblocklist", {})
 
                 if ip_list is None:
@@ -215,16 +248,19 @@ class Plugin(BasePlugin):
 
                 if ip_address not in ip_list:
                     ip_list[ip_address] = username
-                    # Update configuration
                     config.sections["server"]["ipblocklist"] = ip_list
                     config.write_configuration()
-                    self.log(f'IP successfully blocked: {ip_address}')
+                    if not self.settings["suppress_all_messages"]:
+                        self.log(f'IP successfully blocked: {ip_address}')
                 else:
-                    self.log(f'IP already blocked: {ip_address}')
+                    if not self.settings["suppress_all_messages"]:
+                        self.log(f'IP already blocked: {ip_address}')
             else:
-                self.log(f"Could not block IP; IP address not found for username: {username}")
+                if not self.settings["suppress_all_messages"]:
+                    self.log(f"Could not block IP; IP address not found for username: {username}")
         else:
-            self.log(f"Could not block IP; username {username} not found in resolved users.")
+            if not self.settings["suppress_all_messages"]:
+                self.log(f"Could not block IP; username {username} not found in resolved users.")
 
     def user_resolve_notification(self, user, ip_address, port, country):
         if user not in self.resolved_users:
@@ -235,3 +271,11 @@ class Plugin(BasePlugin):
             }
         elif country and self.resolved_users[user]['country'] != country:
             self.resolved_users[user]['country'] = country
+
+    def send_message(self, username):
+        if self.settings["message"]:
+            for line in self.settings["message"].splitlines():
+                for placeholder, option_key in self.PLACEHOLDERS.items():
+                    line = line.replace(placeholder, str(self.settings[option_key]))
+
+                self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
