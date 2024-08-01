@@ -33,10 +33,6 @@ class Plugin(BasePlugin):
         super().__init__(*args, **kwargs)
 
         self.metasettings = {
-            "open_private_chat": {
-                "description": "Open chat tabs when sending private messages to leechers",
-                "type": "bool"
-            },
             "num_files": {
                 "description": "Require users to have a minimum number of shared files:",
                 "type": "int", "minimum": 0
@@ -54,17 +50,14 @@ class Plugin(BasePlugin):
                 "type": "int", "minimum": 0
             },
             "ban_block_ip": {
-                "description": "When banning a user, also block their IP address",
+                "description": "When banning a user, also block their IP address (If IP Is Resolved)",
                 "type": "bool"
             },
             "ignore_user": {
                 "description": "Ignore users who do not meet the sharing requirements",
                 "type": "bool"
             },
-            "send_message_to_banned": {
-                "description": "Send a message to users who are banned",
-                "type": "bool"
-            },
+
             "suppress_banned_user_logs": {
                 "description": "Suppress logs related to banned users",
                 "type": "bool"
@@ -73,18 +66,30 @@ class Plugin(BasePlugin):
                 "description": "Suppress logs related to ignored users",
                 "type": "bool"
             },
+            "suppress_ip_ban_logs": {
+                "description": "Suppress logs related to IP bans",
+                "type": "bool"
+            },
             "suppress_all_messages": {
                 "description": "Suppress all log messages",
                 "type": "bool"
             },
-            "detected_leechers": {
-                "description": "Detected leechers",
-                "type": "list string"
+            "open_private_chat": {
+                "description": "Open chat tabs when sending private messages to leechers",
+                "type": "bool"
+            },
+            "send_message_to_banned": {
+                "description": "Send a message to users who are banned",
+                "type": "bool"
             },
             "message": {
                 "description": ("Private chat message to send to leechers. Each line is sent as a separate message, "
                                 "too many message lines may get you temporarily banned for spam!"),
                 "type": "textview"
+            },
+            "detected_leechers": {
+                "description": "Detected leechers",
+                "type": "list string"
             }
         }
 
@@ -100,6 +105,7 @@ class Plugin(BasePlugin):
             "send_message_to_banned": False,
             "suppress_banned_user_logs": False,
             "suppress_ignored_user_logs": True,
+            "suppress_ip_ban_logs": False,
             "suppress_all_messages": False,
             "detected_leechers": []
         }
@@ -239,7 +245,7 @@ class Plugin(BasePlugin):
         if username and username in self.resolved_users:
             ip_address = self.resolved_users[username].get("ip_address")
             if ip_address:
-                if not self.settings["suppress_all_messages"]:
+                if not self.settings["suppress_ip_ban_logs"]:
                     self.log(f'Attempting to block IP: {ip_address}')
                 ip_list = config.sections["server"].get("ipblocklist", {})
 
@@ -250,16 +256,16 @@ class Plugin(BasePlugin):
                     ip_list[ip_address] = username
                     config.sections["server"]["ipblocklist"] = ip_list
                     config.write_configuration()
-                    if not self.settings["suppress_all_messages"]:
+                    if not self.settings["suppress_ip_ban_logs"]:
                         self.log(f'IP successfully blocked: {ip_address}')
                 else:
-                    if not self.settings["suppress_all_messages"]:
+                    if not self.settings["suppress_ip_ban_logs"]:
                         self.log(f'IP already blocked: {ip_address}')
             else:
-                if not self.settings["suppress_all_messages"]:
+                if not self.settings["suppress_ip_ban_logs"]:
                     self.log(f"Could not block IP; IP address not found for username: {username}")
         else:
-            if not self.settings["suppress_all_messages"]:
+            if not self.settings["suppress_ip_ban_logs"]:
                 self.log(f"Could not block IP; username {username} not found in resolved users.")
 
     def user_resolve_notification(self, user, ip_address, port, country):
