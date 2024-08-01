@@ -57,19 +57,6 @@ class Plugin(BasePlugin):
                 "description": "Ignore users who do not meet the sharing requirements",
                 "type": "bool"
             },
-
-            "suppress_banned_user_logs": {
-                "description": "Suppress logs related to banned users",
-                "type": "bool"
-            },
-            "suppress_ignored_user_logs": {
-                "description": "Suppress logs related to ignored users",
-                "type": "bool"
-            },
-            "suppress_ip_ban_logs": {
-                "description": "Suppress logs related to IP bans",
-                "type": "bool"
-            },
             "suppress_all_messages": {
                 "description": "Suppress all log messages",
                 "type": "bool"
