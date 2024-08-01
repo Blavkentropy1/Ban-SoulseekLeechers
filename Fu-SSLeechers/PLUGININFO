@@ -1,0 +1,4 @@
+Version = "2024-01-08"
+Authors = ["BlavkEntropy1"]
+Name = "Fu-SSLeechers"
+Description = "Auto-ban, ignore, and IP ban leechers. Rewritten from Autobahn and the stock SS Leech plugin."
