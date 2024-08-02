@@ -6,18 +6,14 @@
 #    Version 3, 29 June 2007
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
+# it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 # Rslash Soulseek, I Love your lefty mentality. But I dont like leechers. 
 #
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
@@ -41,10 +37,6 @@ class Plugin(BasePlugin):
                 "description": "Require users to have a minimum number of shared folders:",
                 "type": "int", "minimum": 1
             },
-            "ban_min_files": {
-                "description": "Minimum number of shared files to avoid a ban",
-                "type": "int", "minimum": 0
-            },
             "ban_min_bytes": {
                 "description": "Minimum total size of shared files to avoid a ban (MB)",
                 "type": "int", "minimum": 0
@@ -55,6 +47,10 @@ class Plugin(BasePlugin):
             },
             "ignore_user": {
                 "description": "Ignore users who do not meet the sharing requirements",
+                "type": "bool"
+            },
+            "bypass_share_limit_for_buddies": {
+                "description": "Allow users in the buddy list to bypass the minimum share limit",
                 "type": "bool"
             },
             "suppress_all_messages": {
@@ -92,12 +88,12 @@ class Plugin(BasePlugin):
         self.settings = {
             "message": "Please consider sharing more files if you would like to download from me again. Until then, You are banned. Thanks :)",
             "open_private_chat": False,
-            "num_files": 100,
+            "num_files": 100,  # This is now used for both minimum shared files and ban criteria
             "num_folders": 20,
-            "ban_min_files": 100,
             "ban_min_bytes": 1000,
             "ban_block_ip": False,
             "ignore_user": False,
+            "bypass_share_limit_for_buddies": True,
             "send_message_to_banned": False,
             "suppress_banned_user_logs": False,
             "suppress_ignored_user_logs": True,
@@ -129,6 +125,11 @@ class Plugin(BasePlugin):
             )
 
     def check_user(self, user, num_files, num_folders):
+        if user in self.core.buddies.users and self.settings["bypass_share_limit_for_buddies"]:
+            if not self.settings["suppress_all_messages"]:
+                self.log("User %s is a buddy and bypasses the share limit.", user)
+            return
+
         if user not in self.probed_users:
             return
 
