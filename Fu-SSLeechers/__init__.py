@@ -173,8 +173,6 @@ class Plugin(BasePlugin):
             return
 
         if (num_files <= 0 or num_folders <= 0) and self.probed_users[user] != "requesting_shares":
-            if not self.settings["suppress_all_messages"] and not self.settings["suppress_request_logs"]:
-                self.log("Requesting shared file details from %s to check they are not a leecher.", user)
             self.probed_users[user] = "requesting_shares"
             self.core.userbrowse.request_user_shares(user)
             return
@@ -242,13 +240,13 @@ class Plugin(BasePlugin):
             self.core.network_filter.ban_user(username)
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_banned_user_logs"]:
-                    self.log('Banned user: %s', username)
+                    self.log('Banned Leecher: %s', username)
 
             if self.settings["ignore_user"]:
                 self.core.network_filter.ignore_user(username)
                 if not self.settings["suppress_all_messages"]:
                     if not self.settings["suppress_ignored_user_logs"]:
-                        self.log('Ignored user: %s', username)
+                        self.log('Ignored Leecher: %s', username)
 
     def block_ip(self, username=None):
         if username and username in self.resolved_users:
