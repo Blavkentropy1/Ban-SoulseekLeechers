@@ -131,8 +131,6 @@ class Plugin(BasePlugin):
         self.update_buddy_list()
 
         if user in self.previous_buddies and self.settings["bypass_share_limit_for_buddies"]:
-            if not self.settings["suppress_all_messages"]:
-                self.log("Buddy %s bypasses share limit.", user)
             return
 
         if user not in self.probed_users:
@@ -141,7 +139,19 @@ class Plugin(BasePlugin):
         if self.probed_users[user] == "okay":
             return
 
-        is_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
+        # Fetching user data from the server
+        server_stats = self.core.users.watched.get(user)
+        if server_stats is None:
+            server_files = 0
+            server_folders = 0
+        else:
+            server_files = server_stats.files if server_stats.files is not None else 0
+            server_folders = server_stats.folders if server_stats.folders is not None else 0
+
+        # Check if either server or browsed data is below the threshold
+        is_server_accepted = (server_files >= self.settings["num_files"] and server_folders >= self.settings["num_folders"])
+        is_browsed_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
+        is_accepted = is_server_accepted and is_browsed_accepted
 
         if is_accepted or user in self.previous_buddies:
             if user in self.settings["detected_leechers"]:
@@ -149,7 +159,8 @@ class Plugin(BasePlugin):
 
             self.probed_users[user] = "okay"
             if not self.settings["suppress_all_messages"] and not self.settings["suppress_ignored_user_logs"]:
-                self.log("User %s meets criteria: %d files, %d folders.", (user, num_files, num_folders))
+                self.log("User %s meets criteria: %d files (server), %d folders (server); %d files (browsed), %d folders (browsed).", 
+                        (user, server_files, server_folders, num_files, num_folders))
             self.core.network_filter.unban_user(user)
             self.core.network_filter.unignore_user(user)
             return
@@ -172,7 +183,8 @@ class Plugin(BasePlugin):
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_ignored_user_logs"]:
-                    self.log("Leecher detected: %s with %d files, %d folders. Banned and ignored.", (user, num_files, num_folders))
+                    self.log("Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.", 
+                            (user, server_files, server_folders, num_files, num_folders))
 
             self.ban_user(user)
             if self.settings["ban_block_ip"]:
