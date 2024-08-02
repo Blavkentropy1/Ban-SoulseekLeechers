@@ -2,6 +2,8 @@ from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 
 class Plugin(BasePlugin):
+    VERSION = "1.0"  # Define the version number here
+
     PLACEHOLDERS = {
         "%files%": "num_files",
         "%folders%": "num_folders"
@@ -57,16 +59,6 @@ class Plugin(BasePlugin):
                 "type": "textview",
                 "default": "Please share more files if you wish to download from me again. You are banned until then. Thanks!"
             },
-            "recheck_enabled": {
-                "description": "Enable re-checking users after a specified number of files",
-                "type": "bool",
-                "default": False
-            },
-            "recheck_interval": {
-                "description": "Number of files after which to re-check the user's Shared File",
-                "type": "int", "minimum": 1,
-                "default": 5
-            },
             "detected_leechers": {
                 "description": "Detected leechers",
                 "type": "list string"
@@ -113,8 +105,6 @@ class Plugin(BasePlugin):
             "suppress_ip_ban_logs": self.metasettings["suppress_ip_ban_logs"]["default"],
             "suppress_request_logs": self.metasettings["suppress_request_logs"]["default"],
             "suppress_all_messages": self.metasettings["suppress_all_messages"]["default"],
-            "recheck_interval": self.metasettings["recheck_interval"]["default"],
-            "recheck_enabled": self.metasettings["recheck_enabled"]["default"],
             "detected_leechers": [],
         }
 
@@ -194,11 +184,6 @@ class Plugin(BasePlugin):
     def upload_queued_notification(self, user, virtual_path, real_path):
         if user in self.probed_users:
             self.uploaded_files_count[user] = self.uploaded_files_count.get(user, 0) + 1
-
-            if self.settings["recheck_enabled"] and self.uploaded_files_count[user] % self.settings["recheck_interval"] == 0:
-                stats = self.core.users.watched.get(user)
-                if stats is not None and stats.files is not None and stats.folders is not None:
-                    self.check_user(user, num_files=stats.files, num_folders=stats.folders)
             return
 
         self.probed_users[user] = "requesting_stats"
