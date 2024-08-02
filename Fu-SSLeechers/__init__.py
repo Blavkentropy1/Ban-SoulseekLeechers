@@ -56,10 +56,7 @@ class Plugin(BasePlugin):
                 "description": "Number of files after which to re-check the user's Shared File",
                 "type": "int", "minimum": 0
             },
-            "detected_leechers": {
-                "description": "Detected leechers",
-                "type": "list string"
-            },
+
             "suppress_banned_user_logs": {
                 "description": "Suppress log entries for banned users",
                 "type": "bool"
@@ -75,6 +72,10 @@ class Plugin(BasePlugin):
             "suppress_all_messages": {
                 "description": "Suppress all log messages, regardless of the settings above",
                 "type": "bool"
+            },
+            "detected_leechers": {
+                "description": "Detected leechers",
+                "type": "list string"
             }
         }
 
