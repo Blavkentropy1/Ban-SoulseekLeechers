@@ -13,48 +13,53 @@ class Plugin(BasePlugin):
         self.metasettings = {
             "num_files": {
                 "description": "Require users to have a minimum number of shared files:",
-                "type": "int", "minimum": 0
+                "type": "int", "minimum": 0,
+                "default": 100
             },
             "num_folders": {
                 "description": "Require users to have a minimum number of shared folders:",
-                "type": "int", "minimum": 1
+                "type": "int", "minimum": 1,
+                "default": 20
             },
             "ban_min_bytes": {
                 "description": "Minimum total size of shared files to avoid a ban (MB)",
-                "type": "int", "minimum": 0
+                "type": "int", "minimum": 0,
+                "default": 100
             },
             "ban_block_ip": {
                 "description": "When banning a user, also block their IP address (If IP Is Resolved)",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             },
             "ignore_user": {
                 "description": "Ignore users who do not meet the sharing requirements",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             },
             "bypass_share_limit_for_buddies": {
                 "description": "Allow users in the buddy list to bypass the minimum share limit",
-                "type": "bool"
+                "type": "bool",
+                "default": True
             },
             "open_private_chat": {
                 "description": "Open chat tabs when sending private messages to leechers",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             },
             "send_message_to_banned": {
                 "description": "Send a message to users who are banned",
-                "type": "bool"
-            },
-            "message": {
-                "description": ("Private chat message to send to leechers. Each line is sent as a separate message, "
-                                "too many message lines may get you temporarily banned for spam!"),
-                "type": "textview"
+                "type": "bool",
+                "default": False
             },
             "recheck_enabled": {
                 "description": "Enable re-checking users after a specified number of files",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             },
             "recheck_interval": {
                 "description": "Number of files after which to re-check the user's Shared File",
-                "type": "int", "minimum": 0
+                "type": "int", "minimum": 1,
+                "default": 5
             },
             "detected_leechers": {
                 "description": "Detected leechers",
@@ -62,39 +67,49 @@ class Plugin(BasePlugin):
             },
             "suppress_banned_user_logs": {
                 "description": "Suppress log entries for banned users",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             },
             "suppress_ignored_user_logs": {
                 "description": "Suppress log entries for ignored users",
-                "type": "bool"
+                "type": "bool",
+                "default": True
             },
             "suppress_ip_ban_logs": {
                 "description": "Suppress log entries for IP bans",
                 "type": "bool",
+                "default": True
+            },
+            "suppress_request_logs": {
+                "description": "Suppress log entries when requesting shared file details",
+                "type": "bool",
+                "default": False
             },
             "suppress_all_messages": {
                 "description": "Suppress all log messages",
-                "type": "bool"
+                "type": "bool",
+                "default": False
             }
         }
 
         self.settings = {
             "message": "Please share more files if you wish to download from me again. You are banned until then. Thanks!",
-            "open_private_chat": False,
-            "num_files": 100,
-            "num_folders": 20,
-            "ban_min_bytes": 1000,
-            "ban_block_ip": False,
-            "ignore_user": False,
-            "bypass_share_limit_for_buddies": True,
-            "send_message_to_banned": False,
-            "suppress_banned_user_logs": False,
-            "suppress_ignored_user_logs": True,
-            "suppress_ip_ban_logs": False,
-            "suppress_all_messages": False,
+            "open_private_chat": self.metasettings["open_private_chat"]["default"],
+            "num_files": self.metasettings["num_files"]["default"],
+            "num_folders": self.metasettings["num_folders"]["default"],
+            "ban_min_bytes": self.metasettings["ban_min_bytes"]["default"],
+            "ban_block_ip": self.metasettings["ban_block_ip"]["default"],
+            "ignore_user": self.metasettings["ignore_user"]["default"],
+            "bypass_share_limit_for_buddies": self.metasettings["bypass_share_limit_for_buddies"]["default"],
+            "send_message_to_banned": self.metasettings["send_message_to_banned"]["default"],
+            "suppress_banned_user_logs": self.metasettings["suppress_banned_user_logs"]["default"],
+            "suppress_ignored_user_logs": self.metasettings["suppress_ignored_user_logs"]["default"],
+            "suppress_ip_ban_logs": self.metasettings["suppress_ip_ban_logs"]["default"],
+            "suppress_request_logs": self.metasettings["suppress_request_logs"]["default"],
+            "suppress_all_messages": self.metasettings["suppress_all_messages"]["default"],
+            "recheck_interval": self.metasettings["recheck_interval"]["default"],
+            "recheck_enabled": self.metasettings["recheck_enabled"]["default"],
             "detected_leechers": [],
-            "recheck_interval": 10,
-            "recheck_enabled": True
         }
 
         self.probed_users = {}
@@ -151,8 +166,8 @@ class Plugin(BasePlugin):
             return
 
         if (num_files <= 0 or num_folders <= 0) and self.probed_users[user] != "requesting_shares":
-            if not self.settings["suppress_all_messages"]:
-                self.log("Requesting shares from %s to verify if there are no files shared.", user)
+            if not self.settings["suppress_all_messages"] and not self.settings["suppress_request_logs"]:
+                self.log("Requesting shared file details from %s to check they are not a leecher.", user)
             self.probed_users[user] = "requesting_shares"
             self.core.userbrowse.request_user_shares(user)
             return
@@ -192,32 +207,9 @@ class Plugin(BasePlugin):
     def user_stats_notification(self, user, stats):
         self.check_user(user, num_files=stats["files"], num_folders=stats["dirs"])
 
-    def upload_finished_notification(self, user, *_):
-        if user not in self.probed_users:
-            return
-
-        if self.probed_users[user] != "pending_leecher":
-            return
-
-        self.probed_users[user] = "processed_leecher"
-
-        if self.settings["send_message_to_banned"] and self.settings["message"]:
-            if not self.settings["suppress_all_messages"]:
-                self.log("Sending message to banned user %s", user)
-            for line in self.settings["message"].splitlines():
-                for placeholder, option_key in self.PLACEHOLDERS.items():
-                    line = line.replace(placeholder, str(self.settings[option_key]))
-                self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
-
-        if user not in self.settings["detected_leechers"]:
-            self.settings["detected_leechers"].append(user)
-
-        self.ban_user(user)
-        if self.settings["ban_block_ip"]:
-            self.block_ip(user)
-        if not self.settings["suppress_all_messages"]:
-            if not self.settings["suppress_banned_user_logs"]:
-                self.log("User %s banned.", user)
+    def upload_finished_notification(self, user, virtual_path, real_path):
+        if user in self.probed_users and self.probed_users[user] == "requesting_shares":
+            self.probed_users[user] = "processed_leecher"
 
     def ban_user(self, username=None):
         if username:
