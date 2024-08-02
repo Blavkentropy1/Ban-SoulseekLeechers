@@ -51,6 +51,12 @@ class Plugin(BasePlugin):
                 "type": "bool",
                 "default": False
             },
+            "message": {
+                "description": ("Private chat message to send to leechers. Each line is sent as a separate message, "
+                                "too many message lines may get you temporarily banned for spam!"),
+                "type": "textview",
+                "default": "Please share more files if you wish to download from me again. You are banned until then. Thanks!"
+            },
             "recheck_enabled": {
                 "description": "Enable re-checking users after a specified number of files",
                 "type": "bool",
@@ -93,7 +99,7 @@ class Plugin(BasePlugin):
         }
 
         self.settings = {
-            "message": "Please share more files if you wish to download from me again. You are banned until then. Thanks!",
+            "message": self.metasettings["message"]["default"],
             "open_private_chat": self.metasettings["open_private_chat"]["default"],
             "num_files": self.metasettings["num_files"]["default"],
             "num_folders": self.metasettings["num_folders"]["default"],
@@ -207,9 +213,32 @@ class Plugin(BasePlugin):
     def user_stats_notification(self, user, stats):
         self.check_user(user, num_files=stats["files"], num_folders=stats["dirs"])
 
-    def upload_finished_notification(self, user, virtual_path, real_path):
-        if user in self.probed_users and self.probed_users[user] == "requesting_shares":
-            self.probed_users[user] = "processed_leecher"
+    def upload_finished_notification(self, user, *_):
+        if user not in self.probed_users:
+            return
+
+        if self.probed_users[user] != "pending_leecher":
+            return
+
+        self.probed_users[user] = "processed_leecher"
+
+        if self.settings["send_message_to_banned"] and self.settings["message"]:
+            if not self.settings["suppress_all_messages"]:
+                self.log("Sending message to banned user %s", user)
+            for line in self.settings["message"].splitlines():
+                for placeholder, option_key in self.PLACEHOLDERS.items():
+                    line = line.replace(placeholder, str(self.settings[option_key]))
+                self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
+
+        if user not in self.settings["detected_leechers"]:
+            self.settings["detected_leechers"].append(user)
+
+        self.ban_user(user)
+        if self.settings["ban_block_ip"]:
+            self.block_ip(user)
+        if not self.settings["suppress_all_messages"]:
+            if not self.settings["suppress_banned_user_logs"]:
+                self.log("User %s banned.", user)
 
     def ban_user(self, username=None):
         if username:
