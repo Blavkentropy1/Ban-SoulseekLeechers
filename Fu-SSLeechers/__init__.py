@@ -107,6 +107,7 @@ class Plugin(BasePlugin):
         self.probed_users = {}
         self.resolved_users = {}
         self.uploaded_files_count = {}
+        self.previous_buddies = set()
 
     def loaded_notification(self):
         min_num_files = self.metasettings["num_files"]["minimum"]
@@ -124,8 +125,16 @@ class Plugin(BasePlugin):
                 (self.settings["num_files"], self.settings["num_folders"])
             )
 
+    def update_buddy_list(self):
+        """Update the list of buddies for proper checking."""
+        current_buddies = set(self.core.buddies.users)
+        self.previous_buddies = current_buddies
+
     def check_user(self, user, num_files, num_folders):
-        if user in self.core.buddies.users and self.settings["bypass_share_limit_for_buddies"]:
+        # Ensure buddy list is up-to-date
+        self.update_buddy_list()
+
+        if user in self.previous_buddies and self.settings["bypass_share_limit_for_buddies"]:
             if not self.settings["suppress_all_messages"]:
                 self.log("User %s is a buddy and bypasses the share limit.", user)
             return
@@ -138,7 +147,7 @@ class Plugin(BasePlugin):
 
         is_user_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
 
-        if is_user_accepted or user in self.core.buddies.users:
+        if is_user_accepted or user in self.previous_buddies:
             if user in self.settings["detected_leechers"]:
                 self.settings["detected_leechers"].remove(user)
 
