@@ -184,7 +184,7 @@ class Plugin(BasePlugin):
                     self.log("Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.", 
                             (user, server_files, server_folders, num_files, num_folders))
 
-            self.ban_user(user)
+            self.ban_user(user, num_files=num_files, num_folders=num_folders)
             if self.settings["ban_block_ip"]:
                 self.block_ip(user)
         else:
@@ -228,25 +228,26 @@ class Plugin(BasePlugin):
         if user not in self.settings["detected_leechers"]:
             self.settings["detected_leechers"].append(user)
 
-        self.ban_user(user)
+        self.ban_user(user, num_files=self.uploaded_files_count.get(user, 0), num_folders=0)
         if self.settings["ban_block_ip"]:
             self.block_ip(user)
         if not self.settings["suppress_all_messages"]:
             if not self.settings["suppress_banned_user_logs"]:
                 self.log("User %s banned.", user)
 
-    def ban_user(self, username=None):
+    def ban_user(self, username=None, num_files=0, num_folders=0):
         if username:
             self.core.network_filter.ban_user(username)
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_banned_user_logs"]:
-                    self.log('Banned Leecher: %s', username)
+                    log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
+                    self.log(log_message)
 
             if self.settings["ignore_user"]:
                 self.core.network_filter.ignore_user(username)
                 if not self.settings["suppress_all_messages"]:
                     if not self.settings["suppress_ignored_user_logs"]:
-                        self.log('Ignored Leecher: %s', username)
+                        self.log('Ignored Leecher: %s' % username)
 
     def block_ip(self, username=None):
         if username and username in self.resolved_users:
