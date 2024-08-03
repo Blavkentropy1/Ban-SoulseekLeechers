@@ -21,7 +21,7 @@ class Plugin(BasePlugin):
             "num_folders": {
                 "description": "Require users to have a minimum number of shared folders:",
                 "type": "int", "minimum": 1,
-                "default": 20
+                "default": 5
             },
             "ban_min_bytes": {
                 "description": "Minimum total size of shared files to avoid a ban (MB)",
