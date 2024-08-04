@@ -1,5 +1,6 @@
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
+import time
 
 class Plugin(BasePlugin):
     VERSION = "1.0"  # Define the version number of the plugin
@@ -144,12 +145,45 @@ class Plugin(BasePlugin):
 
         # If the user is a buddy and the bypass option is enabled, skip further checks
         if user in self.previous_buddies and self.settings["bypass_share_limit_for_buddies"]:
+            if not self.settings["suppress_all_messages"]:
+                self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
             return
 
         # If the user has not been probed or is already marked okay, do nothing
         if user not in self.probed_users:
+            self.probed_users[user] = "requesting_stats"
+            stats = self.core.users.watched.get(user)
+
+            if stats is None:
+                return
+
+            if stats.files is not None and stats.folders is not None:
+                self.check_user(user, num_files=stats.files, num_folders=stats.folders)
             return
+
         if self.probed_users[user] == "okay":
+            return
+
+        # Determine if the user meets the criteria based on the server and browsed data
+        is_user_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
+
+        if is_user_accepted or user in self.previous_buddies:
+            if user in self.settings["detected_leechers"]:
+                self.settings["detected_leechers"].remove(user)
+
+            self.probed_users[user] = "okay"
+
+            if is_user_accepted:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("User %s is okay, sharing %d files in %d folders.", (user, num_files, num_folders))
+                self.core.network_filter.unban_user(user)
+                self.core.network_filter.unignore_user(user)
+            else:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+            return
+
+        if not self.probed_users[user].startswith("requesting"):
             return
 
         # Fetch user data from the server
@@ -161,44 +195,44 @@ class Plugin(BasePlugin):
             server_files = server_stats.files if server_stats.files is not None else 0
             server_folders = server_stats.folders if server_stats.folders is not None else 0
 
-        # Determine if the user meets the criteria based on server and browsed data
+        # Check if server files are zero and recheck after 5 seconds
+        if server_files == 0:
+            # Wait for 5 seconds and check again
+            time.sleep(5)
+            server_stats = self.core.users.watched.get(user)
+            if server_stats is None:
+                server_files = 0
+                server_folders = 0
+            else:
+                server_files = server_stats.files if server_stats.files is not None else 0
+                server_folders = server_stats.folders if server_stats.folders is not None else 0
+
+        # Recalculate whether the user meets the criteria
         is_server_accepted = (server_files >= self.settings["num_files"] and server_folders >= self.settings["num_folders"])
         is_browsed_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
-        is_accepted = is_server_accepted and is_browsed_accepted
 
-        # If the user meets the criteria or is a buddy, update the user status and unban/ignore
-        if is_accepted or user in self.previous_buddies:
+        if is_server_accepted or is_browsed_accepted:
             if user in self.settings["detected_leechers"]:
                 self.settings["detected_leechers"].remove(user)
 
             self.probed_users[user] = "okay"
-            if not self.settings["suppress_all_messages"] and not self.settings["suppress_ignored_user_logs"] and not self.settings["suppress_meets_criteria_logs"]:
-                self.log("User %s meets criteria: %d files (server), %d folders (server); %d files (browsed), %d folders (browsed).", 
-                        (user, server_files, server_folders, num_files, num_folders))
-            self.core.network_filter.unban_user(user)
-            self.core.network_filter.unignore_user(user)
-            return
 
-        # If the user is requesting shares, proceed with that process
-        if not self.probed_users[user].startswith("requesting"):
-            return
-
-        if user in self.settings["detected_leechers"]:
-            self.probed_users[user] = "processed_leecher"
-            return
-
-        # If the user has zero files or folders, request shares
-        if (num_files <= 0 or num_folders <= 0) and self.probed_users[user] != "requesting_shares":
-            self.probed_users[user] = "requesting_shares"
-            self.core.userbrowse.request_user_shares(user)
+            if is_server_accepted:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("User %s is okay, sharing %d files in %d folders.", (user, server_files, server_folders))
+                self.core.network_filter.unban_user(user)
+                self.core.network_filter.unignore_user(user)
+            else:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
             return
 
         # If the user is not accepted, mark them as a leech and take action
-        if not is_accepted:
+        if not is_server_accepted and not is_browsed_accepted:
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_ignored_user_logs"]:
-                    self.log("Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.", 
+                    self.log("Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.",
                             (user, server_files, server_folders, num_files, num_folders))
 
             self.ban_user(user, num_files=num_files, num_folders=num_folders)
@@ -243,8 +277,11 @@ class Plugin(BasePlugin):
             if not self.settings["suppress_all_messages"]:
                 self.log("Sending message to banned user %s", user)
             for line in self.settings["message"].splitlines():
+                original_line = line  # Debug line before replacement
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Processed message line: %s", line)
                 self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
 
         # Add the user to the list of detected leechers and ban them
@@ -316,6 +353,9 @@ class Plugin(BasePlugin):
         # Send a message to the banned user if configured
         if self.settings["send_message_to_banned"] and self.settings["message"]:
             for line in self.settings["message"].splitlines():
+                original_line = line  # Debug line before replacement
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Processed message line: %s", line)
                 self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
