@@ -11,7 +11,7 @@ It is inspired by Autobahn and based on the SS Leech plugin.
 
 ## Features
 
-- **Auto-Ban: Automatically bans users who do not meet the specified sharing requirements. *(Default: Enabled)*
+- **Auto-Ban**: Automatically bans users who do not meet the specified sharing requirements. *(Default: Enabled)*
 - **Ignore**: Automatically ignore users who do not meet the specified sharing requirements. *(Default: Disabled)*
 
 - **IP Blocking**: Optionally blocks the IP address of banned users if their IP is resolved. *(Default: Disabled)*
