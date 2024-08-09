@@ -43,6 +43,7 @@
 
 ## Usage
 
-This plugin was created for personal use, and regular updates or additional features are not planned. Users are encouraged to fork the project and make their own modifications as needed. Please be aware that false positives may occur, so discretion is advised.
+This plugin was created for personal use, and regular updates or additional features are not planned. Users are encouraged to fork the project and make their own modifications as needed. 
+Please be aware that false positives may occur, so discretion is advised.
 
-The plugin addresses the challenge of managing numerous leechers and frequent abusive messages. While designed to automate tasks in SoulSeek, it may not suit everyone. Due to limited time and resources, individual case reviews are not feasible.
+The plugin addresses the challenge of managing numerous leechers and frequent abusive messages from them, while prioritizing users who contribute to the network.
