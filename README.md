@@ -1,6 +1,4 @@
-# Fu-SSLeechers
-
-Fu-SSLeechers is a plugin designed to automatically ban, ignore, and IP ban users who do not meet sharing criteria. Inspired by Autobahn and based on the SS Leech plugin.
+Ban-SoulseekLeechers is a plugin designed to automatically ban, ignore, and IP ban users who do not meet sharing criteria. Inspired by Autobahn and based on the SS Leech plugin.
 
 **Compatibility**: Works with Nicotine+ V3.3.4 (potentially all V3.3.x versions; older versions are untested).
 
