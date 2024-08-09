@@ -1,4 +1,0 @@
-Version = "2024-01-08"
-Authors = ["BlavkEntropy1"]
-Name = "Ban-SSLeechers"
-Description = "Ban-SSLeechers is a plugin for automatically banning, ignoring, and IP banning users who do not meet sharing criteria, inspired by Autobahn and based on the SS Leech plugin. Compatible with Nicotine+ V3.3.4 and potentially all V3.3.x versions. For more details, visit https://github.com/BlavkEntropy1/Ban-SSLeechers"
