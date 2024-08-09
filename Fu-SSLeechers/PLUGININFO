@@ -1,4 +1,4 @@
-Version = "2024-01-08"
+Version = "2024-09-08"
 Authors = ["BlavkEntropy1"]
 Name = "Fu-SSLeechers"
-Description = "Auto-ban, ignore, and IP ban leechers. Rewritten from Autobahn and the stock SS Leech plugin. https://github.com/Blavkentropy1/Fu-SSLeechers"
+Description = "Fu-SSLeechers is a plugin for automatically banning, ignoring, and IP banning users who do not meet sharing criteria, inspired by Autobahn and based on the SS Leech plugin. Compatible with Nicotine+ V3.3.4 and potentially all V3.3.x versions. For more details, visit https://github.com/BlavkEntropy1/Fu-SSLeechers"
