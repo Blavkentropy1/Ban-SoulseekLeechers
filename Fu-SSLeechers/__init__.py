@@ -1,6 +1,5 @@
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
-import time
 
 class Plugin(BasePlugin):
     VERSION = "1.0"  # Define the version number of the plugin
@@ -143,10 +142,10 @@ class Plugin(BasePlugin):
         # Update the buddy list before checking the user
         self.update_buddy_list()
 
-        # If the user is a buddy and the bypass option is enabled, skip further checks
-        if user in self.previous_buddies and self.settings["bypass_share_limit_for_buddies"]:
+        # Skip checks if the user is not requesting files and is a buddy
+        if user in self.previous_buddies and not self.probed_users.get(user) == "requesting_stats":
             if not self.settings["suppress_all_messages"]:
-                self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
             return
 
         # If the user has not been probed or is already marked okay, do nothing
@@ -195,19 +194,7 @@ class Plugin(BasePlugin):
             server_files = server_stats.files if server_stats.files is not None else 0
             server_folders = server_stats.folders if server_stats.folders is not None else 0
 
-        # Check if server files are zero and recheck after 5 seconds
-        if server_files == 0:
-            # Wait for 5 seconds and check again
-            time.sleep(5)
-            server_stats = self.core.users.watched.get(user)
-            if server_stats is None:
-                server_files = 0
-                server_folders = 0
-            else:
-                server_files = server_stats.files if server_stats.files is not None else 0
-                server_folders = server_stats.folders if server_stats.folders is not None else 0
-
-        # Recalculate whether the user meets the criteria
+        # Determine if the user meets the criteria based on server and browsed data
         is_server_accepted = (server_files >= self.settings["num_files"] and server_folders >= self.settings["num_folders"])
         is_browsed_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
 
@@ -227,7 +214,7 @@ class Plugin(BasePlugin):
                     self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
             return
 
-        # If the user is not accepted, mark them as a leech and take action
+        # If the user does not meet the criteria, mark them as a leech and take action
         if not is_server_accepted and not is_browsed_accepted:
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
@@ -244,7 +231,7 @@ class Plugin(BasePlugin):
 
     def upload_queued_notification(self, user, virtual_path, real_path):
         # Track the number of files uploaded by the user
-        if user in self.probed_users:
+        if user in self.probed_users and self.probed_users[user] == "requesting_stats":
             self.uploaded_files_count[user] = self.uploaded_files_count.get(user, 0) + 1
             return
 
@@ -359,3 +346,4 @@ class Plugin(BasePlugin):
                 if not self.settings["suppress_all_messages"]:
                     self.log("Processed message line: %s", line)
                 self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
+
