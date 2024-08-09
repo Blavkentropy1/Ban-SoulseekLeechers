@@ -1,4 +1,4 @@
-**Ban-SoulseekLeechers** is a plugin designed to automatically ban, ignore, and IP ban users who do not meet sharing criteria. Inspired by Autobahn and based on the SS Leech plugin.
+**Ban-SoulseekLeechers** is a plugin designed to automatically ban, ignore, and IP ban users who do not meet sharing criteria. It is inspired by Autobahn and based on the SS Leech plugin.
 
 **Compatibility**: Works with Nicotine+ V3.3.4 (potentially all V3.3.x versions; older versions are untested).
 
@@ -9,7 +9,7 @@
 ## Features
 
 - **Auto-Ban and Ignore**: Automatically ban and/or ignore users who do not meet the specified sharing requirements.
-  
+
 - **IP Blocking**: Optionally block the IP address of banned users if their IP is resolved.
 
 - **Minimum Share Requirements**:
@@ -38,11 +38,11 @@
   - **User Resolve Notifications**: Update user information with resolved IP addresses, ports, and countries.
 
 - **Settings Management**:
-  - **Default Values**: Default settings provided for each configurable option.
+  - **Default Values**: Default settings are provided for each configurable option.
   - **Customizable Settings**: Adjust settings to fit personal preferences.
 
 ## Usage
 
 This plugin was created for personal use, and regular updates or additional features are not planned. Users are encouraged to fork the project and make their own modifications as needed. Please be aware that false positives may occur, so discretion is advised.
 
-The plugin addresses the challenge of managing numerous leechers and frequent abusive messages. This approach may not suit everyone, especially new users or those facing technical difficulties. Due to limited time and resources, individual case reviews are not feasible.
+The plugin addresses the challenge of managing numerous leechers and frequent abusive messages. While designed to automate tasks in SoulSeek, it may not suit everyone. Due to limited time and resources, individual case reviews are not feasible.
