@@ -1,8 +1,6 @@
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 
-import time
-
 class Plugin(BasePlugin):
     VERSION = "1.0"  # Define the version number of the plugin
 
@@ -10,42 +8,6 @@ class Plugin(BasePlugin):
         "%files%": "num_files",  # Placeholder for the number of files in messages
         "%folders%": "num_folders"  # Placeholder for the number of folders in messages
     }
-
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.last_checked = {}
-
-    def check_user(self, user, num_files, num_folders):
-        current_time = time.time()
-        check_interval = 10  # Minimum time between checks (in seconds)
-
-        # Skip redundant checks
-        if user in self.last_checked and (current_time - self.last_checked[user]) < check_interval:
-            return
-
-        self.last_checked[user] = current_time
-
-        # Proceed with the existing user check logic
-        if user in self.previous_buddies and not self.probed_users.get(user) == "requesting_stats":
-            if not self.settings["suppress_all_messages"]:
-                self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
-            return
-
-        if user not in self.probed_users:
-            self.probed_users[user] = "requesting_stats"
-            stats = self.core.users.watched.get(user)
-            if stats is None:
-                return
-            if stats.files is not None and stats.folders is not None:
-                self.check_user(user, num_files=stats.files, num_folders=stats.folders)
-            return
-
-        if self.probed_users[user] == "okay":
-            return
-
-
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -242,20 +204,17 @@ class Plugin(BasePlugin):
             if user in self.settings["detected_leechers"]:
                 self.settings["detected_leechers"].remove(user)
 
-        self.probed_users[user] = "okay"
+            self.probed_users[user] = "okay"
 
-        if is_server_accepted:
-            if not self.settings["suppress_all_messages"]:
-                self.log("User %s is okay, sharing %d files in %d folders (Server) and %d files in %d folders (Browsed).",
-                     (user, server_files, server_folders, num_files, num_folders))
-            self.core.network_filter.unban_user(user)
-            self.core.network_filter.unignore_user(user)
-        else:
-            if not self.settings["suppress_all_messages"]:
-                self.log("Buddy %s is sharing %d files in %d folders (Server) and %d files in %d folders (Browsed). Not complaining.",
-                     (user, server_files, server_folders, num_files, num_folders))
-        return
-
+            if is_server_accepted:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("User %s is okay, sharing %d files in %d folders.", (user, server_files, server_folders))
+                self.core.network_filter.unban_user(user)
+                self.core.network_filter.unignore_user(user)
+            else:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+            return
 
         # If the user does not meet the criteria, mark them as a leech and take action
         if not is_server_accepted and not is_browsed_accepted:
