@@ -124,6 +124,9 @@ class Plugin(BasePlugin):
         self.uploaded_files_count = {}  # Track the number of files uploaded by users
         self.previous_buddies = set()  # Track previously known buddies
 
+        # Track whether a user scan has been logged
+        self.logged_scans = set()
+
     def loaded_notification(self):
         # Ensure the minimum requirements for shared files and folders are met
         min_num_files = self.metasettings["num_files"]["minimum"]
@@ -176,12 +179,16 @@ class Plugin(BasePlugin):
 
             if is_user_accepted:
                 if not self.settings["suppress_all_messages"]:
-                    self.log("User %s is okay, sharing %d files in %d folders.", (user, num_files, num_folders))
+                    if user not in self.logged_scans:
+                        self.log("User %s is okay, sharing %d files in %d folders.", (user, num_files, num_folders))
+                        self.logged_scans.add(user)
                 self.core.network_filter.unban_user(user)
                 self.core.network_filter.unignore_user(user)
             else:
                 if not self.settings["suppress_all_messages"]:
-                    self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                    if user not in self.logged_scans:
+                        self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                        self.logged_scans.add(user)
             return
 
         if not self.probed_users[user].startswith("requesting"):
@@ -208,12 +215,16 @@ class Plugin(BasePlugin):
 
             if is_server_accepted:
                 if not self.settings["suppress_all_messages"]:
-                    self.log("User %s is okay, sharing %d files in %d folders.", (user, server_files, server_folders))
+                    if user not in self.logged_scans:
+                        self.log("User %s is okay, sharing %d files in %d folders.", (user, server_files, server_folders))
+                        self.logged_scans.add(user)
                 self.core.network_filter.unban_user(user)
                 self.core.network_filter.unignore_user(user)
             else:
                 if not self.settings["suppress_all_messages"]:
-                    self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                    if user not in self.logged_scans:
+                        self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                        self.logged_scans.add(user)
             return
 
         # If the user does not meet the criteria, mark them as a leech and take action
@@ -221,17 +232,21 @@ class Plugin(BasePlugin):
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_ignored_user_logs"]:
-                    self.log(
-                        "Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.",
-                        (user, server_files, server_folders, num_files, num_folders)
-                    )
+                    if user not in self.logged_scans:
+                        self.log(
+                            "Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.",
+                            (user, server_files, server_folders, num_files, num_folders)
+                        )
+                        self.logged_scans.add(user)
 
             self.ban_user(user, num_files=num_files, num_folders=num_folders)
             if self.settings["ban_block_ip"]:
                 self.block_ip(user)
         else:
             if not self.settings["suppress_all_messages"]:
-                self.log("User %s is not a Leecher.", user)
+                if user not in self.logged_scans:
+                    self.log("User %s is not a Leecher.", user)
+                    self.logged_scans.add(user)
 
     def upload_queued_notification(self, user, virtual_path, real_path):
         # Track the number of files uploaded by the user
@@ -322,7 +337,7 @@ class Plugin(BasePlugin):
                     config.sections["server"]["ipblocklist"] = ip_list
                     config.write_configuration()
                     if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
-                        self.log('Blocked IP: %s', ip_address)
+                       self.log('Blocked IP: %s', ip_address)
                 else:
                     if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
                         self.log('IP already blocked: %s', ip_address)
