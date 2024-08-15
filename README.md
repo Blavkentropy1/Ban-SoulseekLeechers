@@ -30,9 +30,6 @@ It is inspired by Autobahn and based on the SS Leech plugin.
   - **Suppress Logs**: Options to suppress logs for banned users, ignored users, IP bans, and other actions.
   - **Suppress All Messages**: Option to suppress all log messages for a cleaner log. *(Default: Disabled)*
 
-- **Leech Detection**:
-  - **Track Detected Leechers**: Maintains a list of users identified as leechers. *(Default: Enabled)*
-
 - **Message Customization**:
   - **Customizable Ban Message**: Configures the message sent to banned users, with placeholders for dynamic content. 
 
