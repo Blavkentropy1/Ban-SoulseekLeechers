@@ -91,10 +91,6 @@ class Plugin(BasePlugin):
                 "description": "Suppress log entries for users who meet the criteria",
                 "type": "bool",
                 "default": False
-            },
-            "detected_leechers": {
-                "description": "Detected leechers",
-                "type": "list string"
             }
         }
 
