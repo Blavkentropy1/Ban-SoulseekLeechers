@@ -7,7 +7,7 @@ It is inspired by Autobahn and based on the SS Leech plugin.
 
 **Installation**: Place the plugin in `C:\Users\<Username>\AppData\Roaming\nicotine\plugins` or your designated plugin folder.
 
-[![Untitled.jpg](https://i.postimg.cc/mZP2D6JH/Untitled.jpg)](https://postimg.cc/jCrr3vsx)
+[![Untitled.jpg](https://i.postimg.cc/5NW9nBp7/Untitled.jpg)](https://postimg.cc/rzgLptBx)
 
 ## Features
 
