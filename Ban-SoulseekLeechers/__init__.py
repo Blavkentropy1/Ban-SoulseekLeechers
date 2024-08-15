@@ -114,7 +114,7 @@ class Plugin(BasePlugin):
             "detected_leechers": [],
         }
 
-        # Dictionaries to track user states
+        # Initialize dictionaries for tracking user data
         self.probed_users = {}  # Track users whose sharing stats have been probed
         self.resolved_users = {}  # Track resolved IP addresses of users
         self.uploaded_files_count = {}  # Track the number of files uploaded by users
@@ -124,7 +124,7 @@ class Plugin(BasePlugin):
         self.logged_scans = set()
 
     def loaded_notification(self):
-        # Ensure the minimum requirements for shared files and folders are met
+        # Ensure minimum requirements for shared files and folders
         min_num_files = self.metasettings["num_files"]["minimum"]
         min_num_folders = self.metasettings["num_folders"]["minimum"]
 
@@ -143,10 +143,11 @@ class Plugin(BasePlugin):
         # Update the buddy list before checking the user
         self.update_buddy_list()
 
-        # Skip checks if the user is not requesting files and is a buddy
+        # Skip checks if the user is a buddy and has not initiated an upload
         if user in self.previous_buddies and not self.probed_users.get(user) == "requesting_stats":
-            if not self.settings["suppress_all_messages"]:
-                self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
+            if not self.settings["bypass_share_limit_for_buddies"]:
+                if not self.settings["suppress_all_messages"]:
+                    self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
             return
 
         # If the user has not been probed or is already marked okay, do nothing
@@ -187,51 +188,15 @@ class Plugin(BasePlugin):
                         self.logged_scans.add(user)
             return
 
-        if not self.probed_users[user].startswith("requesting"):
-            return
-
-        # Fetch user data from the server
-        server_stats = self.core.users.watched.get(user)
-        if server_stats is None:
-            server_files = 0
-            server_folders = 0
-        else:
-            server_files = server_stats.files if server_stats.files is not None else 0
-            server_folders = server_stats.folders if server_stats.folders is not None else 0
-
-        # Determine if the user meets the criteria based on server and browsed data
-        is_server_accepted = (server_files >= self.settings["num_files"] and server_folders >= self.settings["num_folders"])
-        is_browsed_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
-
-        if is_server_accepted or is_browsed_accepted:
-            if user in self.settings["detected_leechers"]:
-                self.settings["detected_leechers"].remove(user)
-
-            self.probed_users[user] = "okay"
-
-            if is_server_accepted:
-                if not self.settings["suppress_all_messages"]:
-                    if user not in self.logged_scans:
-                        self.log("User %s is okay, sharing %d files in %d folders.", (user, server_files, server_folders))
-                        self.logged_scans.add(user)
-                self.core.network_filter.unban_user(user)
-                self.core.network_filter.unignore_user(user)
-            else:
-                if not self.settings["suppress_all_messages"]:
-                    if user not in self.logged_scans:
-                        self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
-                        self.logged_scans.add(user)
-            return
-
         # If the user does not meet the criteria, mark them as a leech and take action
-        if not is_server_accepted and not is_browsed_accepted:
+        if not is_user_accepted:
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_ignored_user_logs"]:
                     if user not in self.logged_scans:
                         self.log(
-                            "Leecher detected: %s with %d files (server), %d folders (server); %d files (browsed), %d folders (browsed). Banned and ignored.",
-                            (user, server_files, server_folders, num_files, num_folders)
+                            "Leecher detected: %s with %d files; %d folders.", 
+                            (user, num_files, num_folders)
                         )
                         self.logged_scans.add(user)
 
@@ -281,7 +246,9 @@ class Plugin(BasePlugin):
         # Send a message to banned users if configured
         if self.settings["send_message_to_banned"] and self.settings["message"]:
             if not self.settings["suppress_all_messages"]:
-                self.log("Sending message to banned user %s", user)
+                if user not in self.logged_scans:
+                    self.log("Sending message to banned user %s", user)
+                    self.logged_scans.add(user)
             for line in self.settings["message"].splitlines():
                 original_line = line  # Debug line before replacement
                 for placeholder, option_key in self.PLACEHOLDERS.items():
