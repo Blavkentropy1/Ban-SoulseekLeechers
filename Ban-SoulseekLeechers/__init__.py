@@ -266,7 +266,10 @@ class Plugin(BasePlugin):
             self.block_ip(user)
         if not self.settings["suppress_all_messages"]:
             if not self.settings["suppress_banned_user_logs"]:
-                self.log("User %s banned.", user)
+                # Only log if the user has not been logged before
+                if user not in self.logged_scans:
+                    self.log("User %s banned.", user)
+                    self.logged_scans.add(user)
 
     def ban_user(self, username=None, num_files=0, num_folders=0):
         # Ban a user and optionally ignore them
@@ -274,8 +277,11 @@ class Plugin(BasePlugin):
             self.core.network_filter.ban_user(username)
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_banned_user_logs"]:
-                    log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
-                    self.log(log_message)
+                    # Only log if the user has not been logged before
+                    if username not in self.logged_scans:
+                        log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
+                        self.log(log_message)
+                        self.logged_scans.add(username)
 
             if self.settings["ignore_user"]:
                 self.core.network_filter.ignore_user(username)
