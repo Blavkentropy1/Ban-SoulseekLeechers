@@ -1,18 +1,19 @@
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
+from datetime import datetime, timedelta
 
 class Plugin(BasePlugin):
-    VERSION = "1.0"  # Define the version number of the plugin
+    VERSION = "1.0"
 
     PLACEHOLDERS = {
-        "%files%": "num_files",  # Placeholder for the number of files in messages
-        "%folders%": "num_folders"  # Placeholder for the number of folders in messages
+        "%files%": "num_files",
+        "%folders%": "num_folders"
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Define plugin settings and their default values
+        # Define metasettings with defaults for the plugin
         self.metasettings = {
             "num_files": {
                 "description": "Require users to have a minimum number of shared files:",
@@ -91,10 +92,14 @@ class Plugin(BasePlugin):
                 "description": "Suppress log entries for users who meet the criteria",
                 "type": "bool",
                 "default": False
+            },
+            "recent_ban_duration": {
+                "description": "Duration in minutes to consider a ban recent",
+                "type": "int",
+                "default": 60
             }
         }
 
-        # Initialize plugin settings with default values
         self.settings = {
             "message": self.metasettings["message"]["default"],
             "open_private_chat": self.metasettings["open_private_chat"]["default"],
@@ -114,24 +119,23 @@ class Plugin(BasePlugin):
             "detected_leechers": [],
         }
 
-        # Initialize dictionaries for tracking user data
-        self.probed_users = {}  # Track users whose sharing stats have been probed
-        self.resolved_users = {}  # Track resolved IP addresses of users
-        self.uploaded_files_count = {}  # Track the number of files uploaded by users
-        self.previous_buddies = set()  # Track previously known buddies
-
-        # Track whether a user scan has been logged
+        # Initialize internal state variables
+        self.probed_users = {}
+        self.resolved_users = {}
+        self.uploaded_files_count = {}
+        self.previous_buddies = set()
         self.logged_scans = set()
+        self.recent_bans = {}
 
     def loaded_notification(self):
-        # Ensure minimum requirements for shared files and folders
+        """Notification when the plugin is loaded. Sets minimum file and folder counts."""
         min_num_files = self.metasettings["num_files"]["minimum"]
         min_num_folders = self.metasettings["num_folders"]["minimum"]
 
+        # Ensure that minimum values are respected
         self.settings["num_files"] = max(self.settings["num_files"], min_num_files)
         self.settings["num_folders"] = max(self.settings["num_folders"], min_num_folders)
 
-        # Log the minimum requirements unless message suppression is enabled
         if not self.settings["suppress_all_messages"]:
             self.log("Users need at least %d files and %d folders.", (self.settings["num_files"], self.settings["num_folders"]))
 
@@ -140,17 +144,16 @@ class Plugin(BasePlugin):
         self.previous_buddies = set(self.core.buddies.users)
 
     def check_user(self, user, num_files, num_folders):
-        # Update the buddy list before checking the user
+        """Check if a user meets the sharing criteria and handle accordingly."""
         self.update_buddy_list()
 
-        # Skip checks if the user is a buddy and has not initiated an upload
         if user in self.previous_buddies and not self.probed_users.get(user) == "requesting_stats":
             if not self.settings["bypass_share_limit_for_buddies"]:
                 if not self.settings["suppress_all_messages"]:
                     self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
             return
 
-        # If the user has not been probed or is already marked okay, do nothing
+        # If the user is not in probed_users, start probing for their stats
         if user not in self.probed_users:
             self.probed_users[user] = "requesting_stats"
             stats = self.core.users.watched.get(user)
@@ -165,7 +168,6 @@ class Plugin(BasePlugin):
         if self.probed_users[user] == "okay":
             return
 
-        # Determine if the user meets the criteria based on the server and browsed data
         is_user_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
 
         if is_user_accepted or user in self.previous_buddies:
@@ -188,7 +190,6 @@ class Plugin(BasePlugin):
                         self.logged_scans.add(user)
             return
 
-        # If the user does not meet the criteria, mark them as a leech and take action
         if not is_user_accepted:
             self.probed_users[user] = "pending_leecher"
             if not self.settings["suppress_all_messages"]:
@@ -210,54 +211,62 @@ class Plugin(BasePlugin):
                     self.logged_scans.add(user)
 
     def upload_queued_notification(self, user, virtual_path, real_path):
-        # Track the number of files uploaded by the user
+        """Notify the plugin of a queued file upload and update the user's file count."""
         if user in self.probed_users and self.probed_users[user] == "requesting_stats":
+            # Increment the file count for users currently being probed
             self.uploaded_files_count[user] = self.uploaded_files_count.get(user, 0) + 1
             return
 
-        # Start requesting stats for the user if not previously probed
-        self.probed_users[user] = "requesting_stats"
-        stats = self.core.users.watched.get(user)
+        # Only check if the user is not being probed yet
+        if user not in self.probed_users:
+            self.probed_users[user] = "requesting_stats"
+            stats = self.core.users.watched.get(user)
 
-        if stats is None:
-            return
+            if stats is None:
+                return
 
-        if stats.files is not None and stats.folders is not None:
-            self.check_user(user, num_files=stats.files, num_folders=stats.folders)
+            if stats.files is not None and stats.folders is not None:
+                self.check_user(user, num_files=stats.files, num_folders=stats.folders)
 
-    def user_stats_notification(self, user, stats):
-        # Check user status based on updated stats
-        self.check_user(user, num_files=stats["files"], num_folders=stats["dirs"])
+    def upload_started_notification(self, user, *args):
+        """Handle the start of a file upload by a user."""
+        self.upload_queued_notification(user, "", "")
 
     def upload_finished_notification(self, user, *_):
-        # Update the user's status after upload finishes
+        """Handle the completion of an upload for a user, including banning if necessary."""
         if user not in self.probed_users:
             return
 
         if self.probed_users[user] != "pending_leecher":
             return
 
-        # Ensure this code block only runs once per user
         if self.probed_users[user] == "processed_leecher":
             return
 
         self.probed_users[user] = "processed_leecher"
 
-        # Send a message to banned users if configured
+        now = datetime.now()
+        if user in self.recent_bans:
+            ban_time = self.recent_bans[user]
+            if now - ban_time < timedelta(minutes=self.settings["recent_ban_duration"]):
+                if not self.settings["suppress_all_messages"]:
+                    if user not in self.logged_scans:
+                        self.log("User %s was recently banned. Skipping message.", user)
+                return
+
         if self.settings["send_message_to_banned"] and self.settings["message"]:
             if not self.settings["suppress_all_messages"]:
                 if user not in self.logged_scans:
                     self.log("Sending message to banned user %s", user)
                     self.logged_scans.add(user)
             for line in self.settings["message"].splitlines():
-                original_line = line  # Debug line before replacement
+                original_line = line
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
                 if not self.settings["suppress_all_messages"]:
                     self.log("Processed message line: %s", line)
                 self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
 
-        # Add the user to the list of detected leechers and ban them
         if user not in self.settings["detected_leechers"]:
             self.settings["detected_leechers"].append(user)
 
@@ -269,9 +278,10 @@ class Plugin(BasePlugin):
                 self.log("User %s banned.", user)
 
     def ban_user(self, username=None, num_files=0, num_folders=0):
-        # Ban a user and optionally ignore them
+        """Ban a user and optionally ignore them based on settings."""
         if username:
             self.core.network_filter.ban_user(username)
+            self.recent_bans[username] = datetime.now()
             if not self.settings["suppress_all_messages"]:
                 if not self.settings["suppress_banned_user_logs"]:
                     log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
@@ -284,7 +294,7 @@ class Plugin(BasePlugin):
                         self.log('Ignored Leecher: %s' % username)
 
     def block_ip(self, username=None):
-        # Block the IP address of a user if resolved
+        """Block the IP address of a user if resolved."""
         if username and username in self.resolved_users:
             ip_address = self.resolved_users[username].get("ip_address")
             if ip_address:
@@ -312,7 +322,7 @@ class Plugin(BasePlugin):
                 self.log("Username %s IP address was not resolved", username)
 
     def user_resolve_notification(self, user, ip_address, port, country):
-        # Update the resolved user information
+        """Update the resolved IP address and other details for a user."""
         if user not in self.resolved_users:
             self.resolved_users[user] = {
                 'ip_address': ip_address,
@@ -323,10 +333,10 @@ class Plugin(BasePlugin):
             self.resolved_users[user]['country'] = country
 
     def send_message(self, username):
-        # Send a message to the banned user if configured
+        """Send a private message to a user with placeholders replaced by actual settings."""
         if self.settings["send_message_to_banned"] and self.settings["message"]:
             for line in self.settings["message"].splitlines():
-                original_line = line  # Debug line before replacement
+                original_line = line
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
                 if not self.settings["suppress_all_messages"]:
