@@ -97,7 +97,7 @@ class Plugin(BasePlugin):
             "startup_delay": {
                 "description": "Set the delay time (in seconds) before the plugin starts logging. This suppresses Private Message User Scans on boot",
                 "type": "int", "minimum": 0,
-                "default": 2
+                "default": 5
             }
         }
 
@@ -185,7 +185,7 @@ class Plugin(BasePlugin):
         if user not in self.probed_users:
             self.probed_users[user] = "requesting_stats"
             stats = self.core.users.watched.get(user)
-    
+
             if stats is None:
                 return
 
@@ -219,13 +219,6 @@ class Plugin(BasePlugin):
                         if not self.settings.get("suppress_all_messages", False):
                             self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
                             self.logged_scans.add(user)
-            return
-
-        # New functionality for verifying user's actual number of files/folders
-        if (num_files <= 0 or num_folders <= 0) and self.probed_users.get(user) != "requesting_shares":
-            self.log("User %s has no shared files according to the server, requesting shares to verify…", user)
-            self.probed_users[user] = "requesting_shares"
-            self.core.userbrowse.request_user_shares(user)
             return
 
         # If the user does not meet the criteria, mark them as a leech and take action
@@ -314,26 +307,12 @@ class Plugin(BasePlugin):
     def ban_user(self, username=None, num_files=0, num_folders=0):
         # Ban a user and optionally ignore them
         if username:
-            # Ensure self.probed_users[username] is a dictionary before accessing its keys
-            user_data = self.probed_users.get(username, {})
-            if not isinstance(user_data, dict):
-                self.log("Error: Expected dictionary for user data, but got: %s", user_data)
-                user_data = {}
-
-            # Retrieve manual file and folder counts from self.probed_users if available
-            manual_files = user_data.get("manual_files", 0)
-            manual_folders = user_data.get("manual_folders", 0)
-
             self.core.network_filter.ban_user(username)
-
             if not self.notifications_suppressed:
                 if not self.settings.get("suppress_banned_user_logs", False):
                     # Only log if the user has not been logged before
                     if username not in self.logged_scans:
-                        log_message = (
-                            'Banned Leecher %s - Sharing: %d files, %d folders - Manual: %d files, %d folders' %
-                            (username, num_files, num_folders, manual_files, manual_folders)
-                        )
+                        log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
                         self.log(log_message)
                         self.logged_scans.add(username)
 
