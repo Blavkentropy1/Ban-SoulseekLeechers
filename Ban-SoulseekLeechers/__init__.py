@@ -1,3 +1,4 @@
+from threading import Timer
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 
@@ -91,6 +92,12 @@ class Plugin(BasePlugin):
                 "description": "Suppress log entries for users who meet the criteria",
                 "type": "bool",
                 "default": False
+            },
+            # New setting for delay timer
+            "startup_delay": {
+                "description": "Set the delay time (in seconds) before the plugin starts logging. This suppresses Private Message User Scans on boot",
+                "type": "int", "minimum": 0,
+                "default": 5
             }
         }
 
@@ -111,6 +118,7 @@ class Plugin(BasePlugin):
             "suppress_request_logs": self.metasettings["suppress_request_logs"]["default"],
             "suppress_all_messages": self.metasettings["suppress_all_messages"]["default"],
             "suppress_meets_criteria_logs": self.metasettings["suppress_meets_criteria_logs"]["default"],
+            "startup_delay": self.metasettings["startup_delay"]["default"],  # Initialize delay from settings
             "detected_leechers": [],
         }
 
@@ -123,6 +131,28 @@ class Plugin(BasePlugin):
         # Track whether a user scan has been logged
         self.logged_scans = set()
 
+        # Define the startup delay (in seconds)
+        self.startup_delay = self.settings.get("startup_delay", 5)
+        
+        # Initialize suppression status
+        self.notifications_suppressed = True
+        
+        # Schedule the suppression status to be lifted after the startup delay
+        self.schedule_notification_suppression_reset()
+
+    def schedule_notification_suppression_reset(self):
+        # Use a timer to reset suppression status after the delay
+        Timer(self.startup_delay, self.reset_notification_suppression).start()
+
+    def reset_notification_suppression(self):
+        self.notifications_suppressed = False
+        # No log message for suppression reset
+
+    def log(self, message, *args):
+        # Override log method to check suppression status
+        if not self.notifications_suppressed or not self.settings.get("suppress_all_messages", False):
+            super().log(message, *args)
+
     def loaded_notification(self):
         # Ensure minimum requirements for shared files and folders
         min_num_files = self.metasettings["num_files"]["minimum"]
@@ -132,7 +162,7 @@ class Plugin(BasePlugin):
         self.settings["num_folders"] = max(self.settings["num_folders"], min_num_folders)
 
         # Log the minimum requirements unless message suppression is enabled
-        if not self.settings["suppress_all_messages"]:
+        if not self.settings.get("suppress_all_messages", False):
             self.log("Users need at least %d files and %d folders.", (self.settings["num_files"], self.settings["num_folders"]))
 
     def update_buddy_list(self):
@@ -146,8 +176,9 @@ class Plugin(BasePlugin):
         # Skip checks if the user is a buddy and has not initiated an upload
         if user in self.previous_buddies and not self.probed_users.get(user) == "requesting_stats":
             if not self.settings["bypass_share_limit_for_buddies"]:
-                if not self.settings["suppress_all_messages"]:
-                    self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
+                if not self.notifications_suppressed:
+                    if not self.settings.get("suppress_all_messages", False):
+                        self.log("Buddy %s is sharing %d files in %d folders. Skipping check.", (user, num_files, num_folders))
             return
 
         # If the user has not been probed or is already marked okay, do nothing
@@ -175,39 +206,40 @@ class Plugin(BasePlugin):
             self.probed_users[user] = "okay"
 
             if is_user_accepted:
-                if not self.settings["suppress_all_messages"]:
+                if not self.notifications_suppressed:
                     if user not in self.logged_scans:
-                        self.log("User %s is okay, sharing %d files in %d folders.", (user, num_files, num_folders))
-                        self.logged_scans.add(user)
+                        if not self.settings.get("suppress_all_messages", False):
+                            self.log("User %s is okay, sharing %d files in %d folders.", (user, num_files, num_folders))
+                            self.logged_scans.add(user)
                 self.core.network_filter.unban_user(user)
                 self.core.network_filter.unignore_user(user)
             else:
-                if not self.settings["suppress_all_messages"]:
+                if not self.notifications_suppressed:
                     if user not in self.logged_scans:
-                        self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
-                        self.logged_scans.add(user)
+                        if not self.settings.get("suppress_all_messages", False):
+                            self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
+                            self.logged_scans.add(user)
             return
 
         # If the user does not meet the criteria, mark them as a leech and take action
         if not is_user_accepted:
             self.probed_users[user] = "pending_leecher"
-            if not self.settings["suppress_all_messages"]:
-                if not self.settings["suppress_ignored_user_logs"]:
-                    if user not in self.logged_scans:
-                        self.log(
-                            "Leecher detected: %s with %d files; %d folders.", 
-                            (user, num_files, num_folders)
-                        )
-                        self.logged_scans.add(user)
+            if not self.notifications_suppressed:
+                if not self.settings.get("suppress_all_messages", False):
+                    if not self.settings.get("suppress_ignored_user_logs", True):
+                        if user not in self.logged_scans:
+                            self.log("Leecher detected: %s with %d files; %d folders.", (user, num_files, num_folders))
+                            self.logged_scans.add(user)
 
             self.ban_user(user, num_files=num_files, num_folders=num_folders)
             if self.settings["ban_block_ip"]:
                 self.block_ip(user)
         else:
-            if not self.settings["suppress_all_messages"]:
+            if not self.notifications_suppressed:
                 if user not in self.logged_scans:
-                    self.log("User %s is not a Leecher.", user)
-                    self.logged_scans.add(user)
+                    if not self.settings.get("suppress_all_messages", False):
+                        self.log("User %s is not a Leecher.", user)
+                        self.logged_scans.add(user)
 
     def upload_queued_notification(self, user, virtual_path, real_path):
         # Track the number of files uploaded by the user
@@ -245,15 +277,16 @@ class Plugin(BasePlugin):
 
         # Send a message to banned users if configured
         if self.settings["send_message_to_banned"] and self.settings["message"]:
-            if not self.settings["suppress_all_messages"]:
-                if user not in self.logged_scans:
-                    self.log("Sending message to banned user %s", user)
-                    self.logged_scans.add(user)
+            if not self.notifications_suppressed:
+                if not self.settings.get("suppress_all_messages", False):
+                    if user not in self.logged_scans:
+                        self.log("Sending message to banned user %s", user)
+                        self.logged_scans.add(user)
             for line in self.settings["message"].splitlines():
                 original_line = line  # Debug line before replacement
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
-                if not self.settings["suppress_all_messages"]:
+                if not self.settings.get("suppress_all_messages", False):
                     self.log("Processed message line: %s", line)
                 self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
 
@@ -264,8 +297,8 @@ class Plugin(BasePlugin):
         self.ban_user(user, num_files=self.uploaded_files_count.get(user, 0), num_folders=0)
         if self.settings["ban_block_ip"]:
             self.block_ip(user)
-        if not self.settings["suppress_all_messages"]:
-            if not self.settings["suppress_banned_user_logs"]:
+        if not self.notifications_suppressed:
+            if not self.settings.get("suppress_banned_user_logs", False):
                 # Only log if the user has not been logged before
                 if user not in self.logged_scans:
                     self.log("User %s banned.", user)
@@ -275,8 +308,8 @@ class Plugin(BasePlugin):
         # Ban a user and optionally ignore them
         if username:
             self.core.network_filter.ban_user(username)
-            if not self.settings["suppress_all_messages"]:
-                if not self.settings["suppress_banned_user_logs"]:
+            if not self.notifications_suppressed:
+                if not self.settings.get("suppress_banned_user_logs", False):
                     # Only log if the user has not been logged before
                     if username not in self.logged_scans:
                         log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
@@ -285,8 +318,8 @@ class Plugin(BasePlugin):
 
             if self.settings["ignore_user"]:
                 self.core.network_filter.ignore_user(username)
-                if not self.settings["suppress_all_messages"]:
-                    if not self.settings["suppress_ignored_user_logs"]:
+                if not self.notifications_suppressed:
+                    if not self.settings.get("suppress_ignored_user_logs", True):
                         self.log('Ignored Leecher: %s' % username)
 
     def block_ip(self, username=None):
@@ -294,7 +327,7 @@ class Plugin(BasePlugin):
         if username and username in self.resolved_users:
             ip_address = self.resolved_users[username].get("ip_address")
             if ip_address:
-                if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
+                if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                     self.log('Blocking IP: %s', ip_address)
                 ip_list = config.sections["server"].get("ipblocklist", {})
 
@@ -305,16 +338,16 @@ class Plugin(BasePlugin):
                     ip_list[ip_address] = username
                     config.sections["server"]["ipblocklist"] = ip_list
                     config.write_configuration()
-                    if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
-                       self.log('Blocked IP: %s', ip_address)
+                    if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
+                        self.log('Blocked IP: %s', ip_address)
                 else:
-                    if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
+                    if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                         self.log('IP already blocked: %s', ip_address)
             else:
-                if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
+                if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                     self.log("No IP found for username: %s", username)
         else:
-            if not self.settings["suppress_all_messages"] and not self.settings["suppress_ip_ban_logs"]:
+            if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                 self.log("Username %s IP address was not resolved", username)
 
     def user_resolve_notification(self, user, ip_address, port, country):
@@ -335,6 +368,6 @@ class Plugin(BasePlugin):
                 original_line = line  # Debug line before replacement
                 for placeholder, option_key in self.PLACEHOLDERS.items():
                     line = line.replace(placeholder, str(self.settings[option_key]))
-                if not self.settings["suppress_all_messages"]:
+                if not self.settings.get("suppress_all_messages", False):
                     self.log("Processed message line: %s", line)
                 self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
