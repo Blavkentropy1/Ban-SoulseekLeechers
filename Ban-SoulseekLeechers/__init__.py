@@ -140,9 +140,6 @@ class Plugin(BasePlugin):
         # Schedule the suppression status to be lifted after the startup delay
         self.schedule_notification_suppression_reset()
 
-        # Dictionary to store manual check results
-        self.manual_check_results = {}
-
     def schedule_notification_suppression_reset(self):
         # Use a timer to reset suppression status after the delay
         Timer(self.startup_delay, self.reset_notification_suppression).start()
@@ -188,7 +185,7 @@ class Plugin(BasePlugin):
         if user not in self.probed_users:
             self.probed_users[user] = "requesting_stats"
             stats = self.core.users.watched.get(user)
-
+    
             if stats is None:
                 return
 
@@ -201,10 +198,6 @@ class Plugin(BasePlugin):
 
         # Determine if the user meets the criteria based on the server and browsed data
         is_user_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
-
-        # Store manual check results if below threshold
-        if not is_user_accepted:
-            self.manual_check_results[user] = (num_files, num_folders)
 
         if is_user_accepted or user in self.previous_buddies:
             if user in self.settings["detected_leechers"]:
@@ -226,6 +219,13 @@ class Plugin(BasePlugin):
                         if not self.settings.get("suppress_all_messages", False):
                             self.log("Buddy %s is sharing %d files in %d folders. Not complaining.", (user, num_files, num_folders))
                             self.logged_scans.add(user)
+            return
+
+        # New functionality for verifying user's actual number of files/folders
+        if (num_files <= 0 or num_folders <= 0) and self.probed_users.get(user) != "requesting_shares":
+            self.log("User %s has no shared files according to the server, requesting shares to verify…", user)
+            self.probed_users[user] = "requesting_shares"
+            self.core.userbrowse.request_user_shares(user)
             return
 
         # If the user does not meet the criteria, mark them as a leech and take action
@@ -314,16 +314,24 @@ class Plugin(BasePlugin):
     def ban_user(self, username=None, num_files=0, num_folders=0):
         # Ban a user and optionally ignore them
         if username:
-            # Get manual check results
-            manual_files, manual_folders = self.manual_check_results.get(username, (0, 0))
-            
+            # Ensure self.probed_users[username] is a dictionary before accessing its keys
+            user_data = self.probed_users.get(username, {})
+            if not isinstance(user_data, dict):
+                self.log("Error: Expected dictionary for user data, but got: %s", user_data)
+                user_data = {}
+
+            # Retrieve manual file and folder counts from self.probed_users if available
+            manual_files = user_data.get("manual_files", 0)
+            manual_folders = user_data.get("manual_folders", 0)
+
             self.core.network_filter.ban_user(username)
+
             if not self.notifications_suppressed:
                 if not self.settings.get("suppress_banned_user_logs", False):
                     # Only log if the user has not been logged before
                     if username not in self.logged_scans:
                         log_message = (
-                            'Banned Leecher %s - Sharing: %d files, %d folders - Manual %d files and %d folders' % 
+                            'Banned Leecher %s - Sharing: %d files, %d folders - Manual: %d files, %d folders' %
                             (username, num_files, num_folders, manual_files, manual_folders)
                         )
                         self.log(log_message)
