@@ -97,7 +97,7 @@ class Plugin(BasePlugin):
             "startup_delay": {
                 "description": "Set the delay time (in seconds) before the plugin starts logging. This suppresses Private Message User Scans on boot",
                 "type": "int", "minimum": 0,
-                "default": 5
+                "default": 2
             }
         }
 
@@ -139,6 +139,9 @@ class Plugin(BasePlugin):
         
         # Schedule the suppression status to be lifted after the startup delay
         self.schedule_notification_suppression_reset()
+
+        # Dictionary to store manual check results
+        self.manual_check_results = {}
 
     def schedule_notification_suppression_reset(self):
         # Use a timer to reset suppression status after the delay
@@ -198,6 +201,10 @@ class Plugin(BasePlugin):
 
         # Determine if the user meets the criteria based on the server and browsed data
         is_user_accepted = (num_files >= self.settings["num_files"] and num_folders >= self.settings["num_folders"])
+
+        # Store manual check results if below threshold
+        if not is_user_accepted:
+            self.manual_check_results[user] = (num_files, num_folders)
 
         if is_user_accepted or user in self.previous_buddies:
             if user in self.settings["detected_leechers"]:
@@ -307,12 +314,18 @@ class Plugin(BasePlugin):
     def ban_user(self, username=None, num_files=0, num_folders=0):
         # Ban a user and optionally ignore them
         if username:
+            # Get manual check results
+            manual_files, manual_folders = self.manual_check_results.get(username, (0, 0))
+            
             self.core.network_filter.ban_user(username)
             if not self.notifications_suppressed:
                 if not self.settings.get("suppress_banned_user_logs", False):
                     # Only log if the user has not been logged before
                     if username not in self.logged_scans:
-                        log_message = 'Banned Leecher %s - Sharing: %d files, %d folders' % (username, num_files, num_folders)
+                        log_message = (
+                            'Banned Leecher %s - Sharing: %d files, %d folders - Manual %d files and %d folders' % 
+                            (username, num_files, num_folders, manual_files, manual_folders)
+                        )
                         self.log(log_message)
                         self.logged_scans.add(username)
 
