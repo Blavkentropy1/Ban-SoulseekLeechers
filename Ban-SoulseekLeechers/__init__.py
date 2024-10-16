@@ -326,6 +326,7 @@ class Plugin(BasePlugin):
         else:
             if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                 self.log("Username %s IP address was not resolved", username)
+        self.send_message(username=username)
 
     def user_resolve_notification(self, user, ip_address, port, country):
         if user not in self.resolved_users:
