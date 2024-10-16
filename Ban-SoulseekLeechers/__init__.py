@@ -278,6 +278,7 @@ class Plugin(BasePlugin):
         self.ban_user(user, num_files=self.uploaded_files_count.get(user, 0), num_folders=0)
         if self.settings["ban_block_ip"]:
             self.block_ip(user)
+        self.send_message(username=user)
         if not self.notifications_suppressed:
             if not self.settings.get("suppress_banned_user_logs", False):
                 if user not in self.logged_scans:
@@ -326,7 +327,6 @@ class Plugin(BasePlugin):
         else:
             if not self.notifications_suppressed and not self.settings.get("suppress_ip_ban_logs", True):
                 self.log("Username %s IP address was not resolved", username)
-        self.send_message(username=username)
 
     def user_resolve_notification(self, user, ip_address, port, country):
         if user not in self.resolved_users:
