@@ -2,7 +2,6 @@ from threading import Timer
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 import time
-import random
 
 class Plugin(BasePlugin):
     VERSION = "1.0"
