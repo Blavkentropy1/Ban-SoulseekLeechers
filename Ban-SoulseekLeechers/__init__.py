@@ -2,6 +2,7 @@ from threading import Timer
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 import time
+import random
 
 class Plugin(BasePlugin):
     VERSION = "1.0"
@@ -335,13 +336,14 @@ class Plugin(BasePlugin):
 
     def send_message(self, username):
         if self.settings["send_message_to_banned"] and self.settings["message"]:
-            for line in self.settings["message"].splitlines():
-                original_line = line
-                for placeholder, option_key in self.PLACEHOLDERS.items():
-                    line = line.replace(placeholder, str(self.settings[option_key]))
-                if not self.settings.get("suppress_all_messages", False):
-                    self.log("Processed message line: %s", line)
-                self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
+            lines = self.settings.get("message", self.metasettings["message"]["default"]).splitlines()
+            line = random.choice(lines)
+            original_line = line
+            for placeholder, option_key in self.PLACEHOLDERS.items():
+                line = line.replace(placeholder, str(self.settings[option_key]))
+            if not self.settings.get("suppress_all_messages", False):
+                self.log("Processed message line: %s", line)
+            self.send_private(username, line, show_ui=self.settings["open_private_chat"], switch_page=False)
         
     def private_message_received(self, user, message):
         # Add the user to the PM senders set
