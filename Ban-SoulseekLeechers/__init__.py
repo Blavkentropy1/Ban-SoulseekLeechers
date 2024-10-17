@@ -2,6 +2,7 @@ from threading import Timer
 from pynicotine.pluginsystem import BasePlugin
 from pynicotine.config import config
 import time
+import random
 
 class Plugin(BasePlugin):
     VERSION = "1.0"
@@ -222,6 +223,7 @@ class Plugin(BasePlugin):
             self.ban_user(user, num_files=num_files, num_folders=num_folders)
             if self.settings["ban_block_ip"]:
                 self.block_ip(user)
+            self.send_message(username=user)
         else:
             if not self.notifications_suppressed:
                 if user not in self.logged_scans:
@@ -264,13 +266,7 @@ class Plugin(BasePlugin):
                     if user not in self.logged_scans:
                         self.log("Sending message to banned user %s", user)
                         self.logged_scans.add(user)
-            for line in self.settings["message"].splitlines():
-                original_line = line
-                for placeholder, option_key in self.PLACEHOLDERS.items():
-                    line = line.replace(placeholder, str(self.settings[option_key]))
-                if not self.settings.get("suppress_all_messages", False):
-                    self.log("Processed message line: %s", line)
-                self.send_private(user, line, show_ui=self.settings["open_private_chat"], switch_page=False)
+            self.send_message(username=user)
 
         if user not in self.settings["detected_leechers"]:
             self.settings["detected_leechers"].append(user)
